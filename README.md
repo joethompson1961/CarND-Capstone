@@ -30,40 +30,36 @@ Run the docker file
 docker run -p 4567:4567 -v $PWD:/capstone -v /tmp/log:/root/.ros/ --rm -it capstone
 ```
 
+### Windows 10 Powershell
+
+To prevent issues using opencv2 in Windows 10 Subsystem for Linux (bash ubuntu 16.04 in powershell):
+   - Enable execution stack for opencv:
+    `$> sudo apt install execstack`
+    `$> sudo execstack -c /opt/ros/kinetic/lib/libopencv_*  # NOT:  /usr/local/lib/libopencv_*`
+    `$> pip install rospkg`
+
+
 ### Usage
 
-1. Clone the project repository
-```bash
-git clone https://github.com/udacity/CarND-Capstone.git
-```
-
-2. Install python dependencies
-```bash
-cd CarND-Capstone
-pip install -r requirements.txt
-```
-3. Make and run styx
-```bash
-cd ros
-catkin_make
-source devel/setup.sh
-roslaunch launch/styx.launch
-```
+1. Clone the project repository:  
+   	`$> git clone https://github.com/udacity/CarND-Capstone.git`
+2. Install python dependencies :
+   	`$> cd CarND-Capstone`  
+   	`$> pip install -r requirements.txt`
+3. Make and run styx :
+   	`$> cd ros`  
+   	`$> catkin_make`  
+   	`$> source devel/setup.sh`  
+   	`$> roslaunch launch/styx.launch`
 4. Run the simulator
 
 ### Real world testing
 1. Download [training bag](https://drive.google.com/file/d/0B2_h37bMVw3iYkdJTlRSUlJIamM/view?usp=sharing) that was recorded on the Udacity self-driving car (a bag demonstraing the correct predictions in autonomous mode can be found [here](https://drive.google.com/open?id=0B2_h37bMVw3iT0ZEdlF4N01QbHc))
-2. Unzip the file
-```bash
-unzip traffic_light_bag_files.zip
-```
-3. Play the bag file
-```bash
-rosbag play -l traffic_light_bag_files/loop_with_traffic_light.bag
-```
-4. Launch your project in site mode
-```bash
-cd CarND-Capstone/ros
-roslaunch launch/site.launch
-```
-5. Confirm that traffic light detection works on real life images
+2. Unzip the file:
+    `$> unzip traffic_light_bag_files.zip`
+3. Play the bag file:
+    `$> rosbag play -l traffic_light_bag_files/loop_with_traffic_light.bag`
+4. Launch your project in site mode:
+    `$> cd CarND-Capstone/ros`
+    `$> roslaunch launch/site.launch`
+5. Confirm that traffic light detection works on real life images:
