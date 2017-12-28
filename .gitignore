@@ -4,3 +4,8 @@ build
 devel
 
 profile.tmp
+.cproject
+.project
+.pydevproject
+.settings
+ros/index.html
