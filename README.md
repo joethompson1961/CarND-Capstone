@@ -36,8 +36,6 @@ To prevent issues using opencv2 in Windows 10 Subsystem for Linux (bash ubuntu 1
    - Enable execution stack for opencv:
     `$> sudo apt install execstack`
     `$> sudo execstack -c /opt/ros/kinetic/lib/libopencv_*  # NOT:  /usr/local/lib/libopencv_*`
-    `$> pip install rospkg`
-
 
 ### Usage
 
