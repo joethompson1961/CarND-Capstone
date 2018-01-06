@@ -89,6 +89,7 @@ class WaypointUpdater(object):
                 #TODO: it may be better to do this based on distance using distance() function
                 accum = 0                
                 accum = accum + 4*direction
+                closest = j + 4*direction
                 
                 #select the N waypoints that will be published (closer ones in front of the car)
                 waypoints = []
@@ -97,13 +98,15 @@ class WaypointUpdater(object):
                     #stop sending waypoints if circuit is finished                    
                     if (accum + j) >= len(self.all_waypoints) or (accum + j) < 0:
                         break 
+                    # Needs to obey max velocities in the base waypoints except for when avoiding obstacles and obeying traffic signals. 
+                    # to avoid exceeding max lateral acceleration around turns, and so on.
                     waypoints.append(self.all_waypoints[accum + j])
+#                    self.set_waypoint_velocity(waypoints, -1, 15.0)  
 
-                
                 self.publish(waypoints)
                             
                 #display the current closest waypoint           
-                rospy.logwarn('waypoint#:%i  total:%i  speed:%f',j,len(self.all_waypoints),self.get_waypoint_velocity(self.all_waypoints[j]))
+                rospy.logwarn('waypoint#:%i  speed:%f', closest, self.get_waypoint_velocity(waypoints[0]))
             
             rate.sleep()
 
@@ -117,8 +120,8 @@ class WaypointUpdater(object):
     def pose_cb(self, msg):
         self.pose = msg.pose
 
-    def waypoints_cb(self, waypoints):
-        self.all_waypoints = waypoints.waypoints;
+    def waypoints_cb(self, msg):
+        self.all_waypoints = msg.waypoints;
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
