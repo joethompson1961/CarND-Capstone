@@ -4,7 +4,7 @@ import rospy
 import tf
 from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint
-
+import copy
 import math
 
 '''
@@ -23,7 +23,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
-
+MAX_DECEL = 1.0 
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -37,10 +37,15 @@ class WaypointUpdater(object):
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
         self.all_waypoints = None
-        self.pose = None 
+        self.pose = None
+        self.num_waypoints = 0 
         self.loop()
 
     def loop(self):
+
+        stopLine = 750  # DEBUG: come to complete stop at some arbitrary waypoint, then resume.
+        resumeDelayCnt = 0 # DEBUG
+
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
             j = 0
@@ -49,7 +54,7 @@ class WaypointUpdater(object):
             if (self.all_waypoints != None) and (self.pose != None):
                 #search for the closest point to the pose and store index
                 #TODO: this could be improved by looking only close to the last closer point instead of all points
-                for i in range(0,len(self.all_waypoints)-1):
+                for i in range(0,self.num_waypoints-1):
                     waypoint = self.all_waypoints[i]
                     if self.distance2(waypoint.pose.pose,self.pose)<dist:
                         dist = self.distance2(waypoint.pose.pose,self.pose)
@@ -60,9 +65,9 @@ class WaypointUpdater(object):
                 roll, pitch, yaw = tf.transformations.euler_from_quaternion(explicit_quat)
                 
                 #obtain indices for 3 closest points based on the closest point
-                j_0 = (j-1)%len(self.all_waypoints)
-                j_1 = j%len(self.all_waypoints)
-                j_2 = (j+1)%len(self.all_waypoints)
+                j_0 = (j-1)%self.num_waypoints
+                j_1 = j%self.num_waypoints
+                j_2 = (j+1)%self.num_waypoints
 
                 #calculate angle of 3 closest points and pose point
                 angle_0 = math.atan2(self.all_waypoints[j_0].pose.pose.position.y-self.pose.position.y,self.all_waypoints[j_0 ].pose.pose.position.x-self.pose.position.x)
@@ -96,17 +101,31 @@ class WaypointUpdater(object):
                 for i in range(LOOKAHEAD_WPS):
                     accum = accum + direction
                     #stop sending waypoints if circuit is finished                    
-                    if (accum + j) >= len(self.all_waypoints) or (accum + j) < 0:
+                    if (accum + j) >= self.num_waypoints or (accum + j) < 0:
                         break 
                     # Needs to obey max velocities in the base waypoints except for when avoiding obstacles and obeying traffic signals. 
                     # to avoid exceeding max lateral acceleration around turns, and so on.
-                    waypoints.append(self.all_waypoints[accum + j])
-#                    self.set_waypoint_velocity(waypoints, -1, 15.0)  
+#                    waypoints[i].twist.twist.linear.x = self.max_velocity
+                    waypoints.append(copy.deepcopy(self.all_waypoints[accum + j]))
+
+                # If there's a red traffic light within the look-ahead waypoints, decelerate to a complete stop at the stopline of
+                # the closest light.
+                # Acceleration should not exceed 10 m/s^2 and jerk should not exceed 10 m/s^3
+                # TODO: If more than one traffic light within range, find the closest. Don't need this for now.
+                if (stopLine >= closest) and (stopLine < (closest + LOOKAHEAD_WPS)):
+                    stopHere = stopLine - closest
+                    waypoints = self.decelerate(waypoints, stopHere)
+                # DEBUG ONLY: When we reach the stopline, move stopline forward by 1000 and resume (but wait a moment to resume)             
+                if stopLine <= closest+2:
+                    resumeDelayCnt += 1
+                    if resumeDelayCnt > 100:
+                        resumeDelayCnt = 0
+                        stopLine += 1300
 
                 self.publish(waypoints)
                             
                 #display the current closest waypoint           
-                rospy.logwarn('waypoint#:%i  speed:%f', closest, self.get_waypoint_velocity(waypoints[0]))
+                rospy.logwarn('waypoint#:%i  target velocity:%f MPH  stopLine:%i', closest, self.get_waypoint_velocity(waypoints[0]), stopLine)
             
             rate.sleep()
 
@@ -122,9 +141,10 @@ class WaypointUpdater(object):
 
     def waypoints_cb(self, msg):
         self.all_waypoints = msg.waypoints;
+        self.num_waypoints = len(self.all_waypoints)
 
     def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement
+        # TODO: Callback for /traffic_waypoint message. Implement'
         pass
 
     def obstacle_cb(self, msg):
@@ -150,6 +170,19 @@ class WaypointUpdater(object):
         dist = dl(pose1.position, pose2.position)
         return dist
 
+    def decelerate(self, waypoints, stopHere):
+        last = waypoints[stopHere]
+        dist = self.distance2(waypoints[0].pose.pose, last.pose.pose)
+        for i in range(0,stopHere):
+            dist = self.distance2(waypoints[i].pose.pose, last.pose.pose)
+            vel = math.sqrt(2 * MAX_DECEL * dist)   # A minimum jerk formula would probalby work better here
+            if vel < 1.:
+                vel = 0.
+            waypoints[i].twist.twist.linear.x = min(vel, waypoints[i].twist.twist.linear.x)
+        # Set all waypoints past stopping point to 0mph
+        for i in range(stopHere,len(waypoints)-1):
+            waypoints[i].twist.twist.linear.x = 0.
+        return waypoints
 
 if __name__ == '__main__':
     try:

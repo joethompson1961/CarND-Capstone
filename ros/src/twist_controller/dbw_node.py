@@ -56,9 +56,9 @@ class DBWNode(object):
         # TODO: Create `TwistController` object
         # self.controller = TwistController(<Arguments you wish to provide>)
         self.controller = Controller(vehicle_mass,brake_deadband,decel_limit,accel_limit,wheel_radius,wheel_base, steer_ratio, 1.0, max_lat_accel, max_steer_angle)
-        self.current_velocity = 0
-        self.linear_velocity = 0
-        self.angular_velocity = 0
+        self.current_velocity = 0  # mps - from simulator
+        self.linear_velocity = 0   # mps - from waypoint_follower 
+        self.angular_velocity = 0  # from waypoint_follower
         #self.twist_cmd = None
         self.dbw = False
         
@@ -82,9 +82,9 @@ class DBWNode(object):
             #if self.twist_cmd != None:			
             throttle, brake, steering = self.controller.control(self.linear_velocity,self.angular_velocity,self.current_velocity)
 
-#            rospy.loginfo('velocity: %f  target velocity: %f', self.current_velocity, self.linear_velocity)
+#            rospy.logwarn('velocity: %f  target velocity: %f', self.current_velocity, self.linear_velocity)
 #            rospy.loginfo('target angular velocity: %f', self.angular_velocity)
-            rospy.logwarn('throttle: %f  brake: %f  steering: %f', throttle, brake, steering)
+#            rospy.logwarn('throttle: %f  brake: %f  steering: %f', throttle, brake, steering)
 
             if self.dbw:
 	            self.publish(throttle, brake, steering)
@@ -92,7 +92,7 @@ class DBWNode(object):
 	
     def current_velocity_cb(self, msg):
 		# TODO: Implement
-		self.current_velocity = msg.twist.linear.x
+		self.current_velocity = msg.twist.linear.x  # simlulator returns velocity in mps
 		
     def twist_cmd_cb(self, msg):
 		# TODO: Implement
