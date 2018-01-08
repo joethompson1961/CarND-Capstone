@@ -56,25 +56,22 @@ class DBWNode(object):
         # TODO: Create `TwistController` object
         # self.controller = TwistController(<Arguments you wish to provide>)
         self.controller = Controller(vehicle_mass,brake_deadband,decel_limit,accel_limit,wheel_radius,wheel_base, steer_ratio, 1.0, max_lat_accel, max_steer_angle)
-        self.current_velocity = 0
-        self.linear_velocity = 0
-        self.angular_velocity = 0
+        self.current_velocity = 0  # mps - from simulator
+        self.linear_velocity = 0   # mps - from waypoint_follower 
+        self.angular_velocity = 0  # from waypoint_follower
         #self.twist_cmd = None
         self.dbw = False
         
-        self.print_interval = 0
-        		
         # TODO: Subscribe to all the topics you need to
         rospy.Subscriber('/current_velocity', TwistStamped, self.current_velocity_cb)
         rospy.Subscriber('/twist_cmd', TwistStamped, self.twist_cmd_cb)
         rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb)
-		
 
         self.loop()
 
     def loop(self):
-		rate = rospy.Rate(50) # 50Hz
-		while not rospy.is_shutdown():
+        rate = rospy.Rate(50) # 50Hz
+        while not rospy.is_shutdown():
             # TODO: Get predicted throttle, brake, and steering using `twist_controller`
             # You should only publish the control commands if dbw is enabled
             # throttle, brake, steering = self.controller.control(<proposed linear velocity>,
@@ -82,16 +79,20 @@ class DBWNode(object):
             #                                                     <current linear velocity>,
             #                                                     <dbw status>,
             #                                                     <any other argument you need>)
-			#if self.twist_cmd != None:			
-			throttle, brake, steering = self.controller.control(self.linear_velocity,self.angular_velocity,self.current_velocity)
-			if self.dbw:
-				self.publish(throttle, brake, steering)
-			rate.sleep()
+            #if self.twist_cmd != None:			
+            throttle, brake, steering = self.controller.control(self.linear_velocity,self.angular_velocity,self.current_velocity)
 
-			
+#            rospy.logwarn('velocity: %f  target velocity: %f', self.current_velocity, self.linear_velocity)
+#            rospy.loginfo('target angular velocity: %f', self.angular_velocity)
+#            rospy.logwarn('throttle: %f  brake: %f  steering: %f', throttle, brake, steering)
+
+            if self.dbw:
+	            self.publish(throttle, brake, steering)
+            rate.sleep()
+	
     def current_velocity_cb(self, msg):
 		# TODO: Implement
-		self.current_velocity = msg.twist.linear.x
+		self.current_velocity = msg.twist.linear.x  # simlulator returns velocity in mps
 		
     def twist_cmd_cb(self, msg):
 		# TODO: Implement
@@ -100,38 +101,31 @@ class DBWNode(object):
 		self.angular_velocity = msg.twist.angular.z
 		
     def dbw_enabled_cb(self, msg):
-		# TODO: Implement
-		self.dbw = msg
-			
-    # Note that throttle values passed to publish should be in the range 0 to 1,
-    # although a throttle of 1 means the vehicle throttle will be fully engaged
-    # Brake values passed to publish should be in units of torque (N*m). The correct
-    # values for brake can be computed using the desired acceleration, weight of the
-    # vehicle, and wheel radius.
+        # TODO: Implement
+        self.dbw = msg
+        rospy.logwarn('drive by wire: %s', msg)        
+
     def publish(self, throttle, brake, steer):
-        self.print_interval = (self.print_interval+1) % 20
-        
+        # Throttle values passed to publish should be in the range 0 to 1,
+        # although a throttle of 1 means the vehicle throttle will be fully engaged
         tcmd = ThrottleCmd()
         tcmd.enable = True
         tcmd.pedal_cmd_type = ThrottleCmd.CMD_PERCENT
         tcmd.pedal_cmd = throttle
-        if self.print_interval == 0:
-            rospy.logwarn('throttle: %f', throttle)
         self.throttle_pub.publish(tcmd)
 
         scmd = SteeringCmd()
         scmd.enable = True
         scmd.steering_wheel_angle_cmd = steer
-        if self.print_interval == 0:
-            rospy.logwarn('steering: %f', steer)
         self.steer_pub.publish(scmd)
 
+        # Brake values passed to publish should be in units of torque (N*m). The correct
+        # values for brake can be computed using the desired acceleration, weight of the
+        # vehicle, and wheel radius.
         bcmd = BrakeCmd()
         bcmd.enable = True
         bcmd.pedal_cmd_type = BrakeCmd.CMD_TORQUE
         bcmd.pedal_cmd = brake
-        if self.print_interval == 0:
-            rospy.logwarn('brake: %f', brake)
         self.brake_pub.publish(bcmd)
 
 if __name__ == '__main__':

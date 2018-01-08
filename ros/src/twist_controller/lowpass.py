@@ -1,4 +1,6 @@
 
+# tau = LPF time constant
+# ts = time step (seconds)
 class LowPassFilter(object):
     def __init__(self, tau, ts):
         self.a = 1. / (tau / ts + 1.)

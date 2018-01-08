@@ -23,6 +23,7 @@ class WaypointLoader(object):
         self.pub = rospy.Publisher('/base_waypoints', Lane, queue_size=1, latch=True)
 
         self.velocity = self.kmph2mps(rospy.get_param('~velocity'))
+        rospy.logwarn("velocity parm: %f (mps)", self.velocity)
         self.new_waypoint_loader(rospy.get_param('~path'))
         rospy.spin()
 
@@ -37,6 +38,7 @@ class WaypointLoader(object):
     def quaternion_from_yaw(self, yaw):
         return tf.transformations.quaternion_from_euler(0., 0., yaw)
 
+    # convert kilometers per hour to meters per sec
     def kmph2mps(self, velocity_kmph):
         return (velocity_kmph * 1000.) / (60. * 60.)
 
