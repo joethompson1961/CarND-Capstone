@@ -59,7 +59,6 @@ class TLDetector(object):
             tl = TrafficLight()
             tl.pose.pose.position.x, tl.pose.pose.position.y, tl.pose.pose.position.z = stop_pt[0], stop_pt[1], 0
             self.stop_pts.append( self.get_closest_waypoint(tl.pose.pose.position) )
-            
         rospy.spin()
 
     def pose_cb(self, msg):
@@ -147,7 +146,7 @@ class TLDetector(object):
 
         """
         light = None
-        rospy.logwarn('Traffic light processing beginning')
+#        rospy.logwarn('Traffic light processing beginning')
         
         #Exit early if no waypoints are set
         if (self.waypoints is None):
@@ -166,7 +165,7 @@ class TLDetector(object):
         if light:
             state = self.get_light_state(light) #Main way, uses classifier
             state = light.state #TODO: REMOVE AFTER TRAINING & DEBUGGING 
-            rospy.logwarn('TRAFFIC LIGHT AT: %i  STATE:%i',light_wp,state)
+#            rospy.logwarn('TRAFFIC LIGHT AT: %i  STATE:%i',light_wp,state)
             return light_wp, state
         
         #Otherwise, trash and exit.    

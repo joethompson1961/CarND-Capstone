@@ -4,6 +4,7 @@ import rospy
 import tf
 from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint
+from std_msgs.msg import Int32
 import copy
 import math
 
@@ -31,21 +32,18 @@ class WaypointUpdater(object):
 
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
-    
-        # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
-
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        rospy.Subscriber('/obstacle_waypoint', Int32, self.obstacle_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
         self.all_waypoints = None
         self.pose = None
-        self.num_waypoints = 0 
+        self.num_waypoints = 0
+        self.redLight_wp = -1
+        self.obstacle_wp = -1 
         self.loop()
 
     def loop(self):
-
-        stopLine = 750  # DEBUG: come to complete stop at some arbitrary waypoint, then resume.
-        resumeDelayCnt = 0 # DEBUG
-
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
             j = 0
@@ -93,7 +91,7 @@ class WaypointUpdater(object):
                 #skip a few waypoints to make sure they are in front of the car
                 #TODO: it may be better to do this based on distance using distance() function
                 accum = 0                
-                accum = accum + 4*direction
+                accum += 4*direction
                 closest = j + 4*direction
                 
                 #select the N waypoints that will be published (closer ones in front of the car)
@@ -104,28 +102,19 @@ class WaypointUpdater(object):
                     if (accum + j) >= self.num_waypoints or (accum + j) < 0:
                         break 
                     # Needs to obey max velocities in the base waypoints except for when avoiding obstacles and obeying traffic signals. 
-                    # to avoid exceeding max lateral acceleration around turns, and so on.
-#                    waypoints[i].twist.twist.linear.x = self.max_velocity
                     waypoints.append(copy.deepcopy(self.all_waypoints[accum + j]))
 
-                # If there's a red traffic light within the look-ahead waypoints, decelerate to a complete stop at the stopline of
-                # the closest light.
-                # Acceleration should not exceed 10 m/s^2 and jerk should not exceed 10 m/s^3
-                # TODO: If more than one traffic light within range, find the closest. Don't need this for now.
-                if (stopLine >= closest) and (stopLine < (closest + LOOKAHEAD_WPS)):
-                    stopHere = stopLine - closest
-                    waypoints = self.decelerate(waypoints, stopHere)
-                # DEBUG ONLY: When we reach the stopline, move stopline forward by 1000 and resume (but wait a moment to resume)             
-                if stopLine <= closest+2:
-                    resumeDelayCnt += 1
-                    if resumeDelayCnt > 100:
-                        resumeDelayCnt = 0
-                        stopLine += 1300
+                # If there's a red traffic light within the look-ahead waypoints, decelerate to a complete stop at the red light waypoint.
+                # TODO: Acceleration should not exceed 10 m/s^2 and jerk should not exceed 10 m/s^3
+                if (self.redLight_wp != -1):
+                    if (self.redLight_wp >= closest) and (self.redLight_wp < (closest + LOOKAHEAD_WPS)):
+                        stopHere = self.redLight_wp - closest
+                        waypoints = self.decelerate(waypoints, stopHere)
 
                 self.publish(waypoints)
                             
                 #display the current closest waypoint           
-                rospy.logwarn('waypoint#:%i  target velocity:%f MPH  stopLine:%i', closest, self.get_waypoint_velocity(waypoints[0]), stopLine)
+                rospy.logwarn('waypoint#:%i  target velocity:%f MPH  redLight:%i', closest, self.get_waypoint_velocity(waypoints[0]), self.redLight_wp)
             
             rate.sleep()
 
@@ -143,13 +132,13 @@ class WaypointUpdater(object):
         self.all_waypoints = msg.waypoints;
         self.num_waypoints = len(self.all_waypoints)
 
+    # Callback for /traffic_waypoint message (traffic lights)
     def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement'
-        pass
+        self.redLight_wp = msg.data
 
+    # Callback for /obstacle_waypoint message. We will implement it later
     def obstacle_cb(self, msg):
-        # TODO: Callback for /obstacle_waypoint message. We will implement it later
-        pass
+        self.obstacle_wp = msg.data
 
     def get_waypoint_velocity(self, waypoint):
         return waypoint.twist.twist.linear.x
