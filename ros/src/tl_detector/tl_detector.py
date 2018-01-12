@@ -22,9 +22,15 @@ class TLDetector(object):
         self.waypoints = None
         self.camera_image = None
         self.lights = []
+        self.state = TrafficLight.UNKNOWN
+        self.last_state = TrafficLight.UNKNOWN
+        self.last_wp = -1
+        self.state_count = 0
+        self.stop_pts = []
+        
 
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        self.waypoints = rospy.wait_for_message('/base_waypoints', Lane).waypoints
         
         '''
         /vehicle/traffic_lights provides you with the location of the traffic light in 3D map space and
@@ -45,12 +51,7 @@ class TLDetector(object):
         self.light_classifier = TLClassifier()
         self.listener = tf.TransformListener()
 
-        self.state = TrafficLight.UNKNOWN
-        self.last_state = TrafficLight.UNKNOWN
-        self.last_wp = -1
-        self.state_count = 0
-        self.stop_pts = []
-        
+      
         print "Waiting for base waypoints......"
         rospy.wait_for_message('/base_waypoints', Lane)
         print "Proceeding with base waypoints...."
@@ -131,8 +132,22 @@ class TLDetector(object):
             self.prev_light_loc = None
             return False
 
-        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        #cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
 
+        #COPIED BLOCK
+        #if hasattr(self.camera_image, 'encoding'):
+        #    self.attribute = self.camera_image.encoding
+        #    if self.camera_image.encoding == '8UC3':
+        #        self.camera_image.encoding = "rgb8"
+        #else:
+        #    self.camera_image.encoding = 'rgb8'
+        #cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
+
+        #END
+
+        #It seems maybe it just needs to be set to rgb8?
+        cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "rgb8")
+        
         #Get classification
         return self.light_classifier.get_classification(cv_image)
 
@@ -163,9 +178,11 @@ class TLDetector(object):
         light = self.lights[index]
         
         if light:
-            state = self.get_light_state(light) #Main way, uses classifier
-            state = light.state #TODO: REMOVE AFTER TRAINING & DEBUGGING 
-#            rospy.logwarn('TRAFFIC LIGHT AT: %i  STATE:%i',light_wp,state)
+            state_pred = self.get_light_state(light) #Main way, uses classifier
+            state_act = light.state 
+            rospy.logwarn('Traffic light is at: %i', light_wp)
+            rospy.logwarn('Predicted vs actual state: %i | %i',state_pred,state_act)
+            state = state_act #TODO: REMOVE AFTER DEBUGGING NN CLASSIFIER
             return light_wp, state
         
         #Otherwise, trash and exit.    
