@@ -5,6 +5,8 @@ import numpy as np
 import tensorflow as tf
 from keras.models import load_model
 
+IN_IMAGE_WIDTH  = 400
+IN_IMAGE_HEIGHT = 300
 class TLClassifier(object):
     def __init__(self):
         #TODO load classifier
@@ -28,7 +30,7 @@ class TLClassifier(object):
         """
         #TODO implement light color prediction
         
-        img = cv2.resize(src=image, dsize=(400,400))
+        img = cv2.resize(src=image, dsize=(IN_IMAGE_HEIGHT,IN_IMAGE_WIDTH))
         img = img.astype(float)
         img = img / 255.0
 
@@ -41,6 +43,10 @@ class TLClassifier(object):
             print('Predicted state: ', predicted_cat[0])
             light = predicted_cat[0]
 
-            if(light==1):
+            if(light==0):
+                return TrafficLight.GREEN
+            elif(light==1):
+                return TrafficLight.YELLOW
+            elif(light==2):
                 return TrafficLight.RED
         return TrafficLight.UNKNOWN

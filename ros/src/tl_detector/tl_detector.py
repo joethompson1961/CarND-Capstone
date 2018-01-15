@@ -180,8 +180,7 @@ class TLDetector(object):
         if light:
             state_pred = self.get_light_state(light) #Main way, uses classifier
             state_act = light.state 
-            rospy.logwarn('Traffic light is at: %i', light_wp)
-            rospy.logwarn('Predicted vs actual state: %i | %i',state_pred,state_act)
+            rospy.logwarn('Predicted vs actual state: %i | %i > WP= %i',state_pred,state_act, light_wp)
             state = state_act #TODO: REMOVE AFTER DEBUGGING NN CLASSIFIER
             return light_wp, state
         
