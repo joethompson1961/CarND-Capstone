@@ -12,7 +12,7 @@ class TLClassifier(object):
         rospack = rospkg.RosPack()
         rospath = rospack.get_path('tl_detector')
         print("Current path: " +rospath)
-        self.model = load_model(rospath + '/test_1.h5')
+        self.model = load_model(rospath + '/prototype_traffic_light_classifier.h5')
         self.model._make_predict_function()
         self.graph = tf.get_default_graph()
 
