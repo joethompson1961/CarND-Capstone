@@ -3,10 +3,14 @@
 import rospy
 import tf
 from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import TwistStamped
 from styx_msgs.msg import Lane, Waypoint
 from std_msgs.msg import Int32
 import copy
 import math
+import scipy.interpolate as inter
+import numpy as np
+import pylab as plt
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -34,6 +38,7 @@ class WaypointUpdater(object):
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
         rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
         rospy.Subscriber('/obstacle_waypoint', Int32, self.obstacle_cb)
+        rospy.Subscriber('/current_velocity', TwistStamped, self.current_velocity_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
         self.all_waypoints = None
@@ -41,10 +46,14 @@ class WaypointUpdater(object):
         self.num_waypoints = 0
         self.redLight_wp = -1
         self.obstacle_wp = -1 
+        self.current_velocity = 22
         self.loop()
 
     def loop(self):
         rate = rospy.Rate(50) # 50Hz
+        prev_closest = -1
+        waypoints = []
+        cruising = 1
         while not rospy.is_shutdown():
             j = 0
             #start with a long distance since this number will be decreasing as waypoints are measured
@@ -68,7 +77,7 @@ class WaypointUpdater(object):
                 j_2 = (j+1)%self.num_waypoints
 
                 #calculate angle of 3 closest points and pose point
-                angle_0 = math.atan2(self.all_waypoints[j_0].pose.pose.position.y-self.pose.position.y,self.all_waypoints[j_0 ].pose.pose.position.x-self.pose.position.x)
+                angle_0 = math.atan2(self.all_waypoints[j_0].pose.pose.position.y-self.pose.position.y,self.all_waypoints[j_0].pose.pose.position.x-self.pose.position.x)
                 angle_1 = math.atan2(self.all_waypoints[j_1].pose.pose.position.y-self.pose.position.y,self.all_waypoints[j_1].pose.pose.position.x-self.pose.position.x)
                 angle_2 = math.atan2(self.all_waypoints[j_2].pose.pose.position.y-self.pose.position.y,self.all_waypoints[j_2].pose.pose.position.x-self.pose.position.x)
                 
@@ -90,26 +99,67 @@ class WaypointUpdater(object):
                 
                 #skip a few waypoints to make sure they are in front of the car
                 #TODO: it may be better to do this based on distance using distance() function
-                accum = 0                
-                accum += 2*direction
-                closest = j + 2*direction
-                
+                accum = 4*direction
+                closest = j + 4*direction
+                if direction == -1:
+                    rospy.logwarn("DOWNSTREAM, j: %i  closest: %i", j, closest)
+                                
+                # A spline is used to generate low jerk deceleration for red lights.
+                #
+                # Before building the new waypoints, initialize spline anchor points with velocities
+                # from the most recent two waypoints from previous update. Using a couple of the
+                # previously planned velocities produces a smooth transition without jerk.
+                x = []
+                y = []
+                if prev_closest == -1:
+                    x.append(0)
+                    y.append(0)
+                    x.append(1)
+                    y.append(0)
+                else:
+                    wp_now = closest - prev_closest
+                    x.append(0)
+                    y.append(self.get_waypoint_velocity(waypoints[wp_now]))
+                    x.append(1)
+                    y.append(self.get_waypoint_velocity(waypoints[wp_now+1]))
+                prev_closest = closest
+
+                # Adjust stopping distance for current speed.
+                # Current_velocity is in mps. Each multiple of 25MPH requires approx 30 waypoints stopping distance.
+                # Required_stopping_distance is proportional to the current top speed.
+                required_stopping_distance = self.get_waypoint_velocity(self.all_waypoints[closest]) * 3.5
+
+                waypoints[:] = []  # clear the waypoint list
                 #select the N waypoints that will be published (closer ones in front of the car)
-                waypoints = []
                 for i in range(LOOKAHEAD_WPS):
-                    accum = accum + direction
+                    accum += direction
                     #stop sending waypoints if circuit is finished                    
                     if (accum + j) >= self.num_waypoints or (accum + j) < 0:
                         break 
-                    # Needs to obey max velocities in the base waypoints except for when avoiding obstacles and obeying traffic signals. 
+                    # Needs to obey max velocities in the base waypoints except for when avoiding obstacles
+                    # and obeying traffic signals. 
                     waypoints.append(copy.deepcopy(self.all_waypoints[accum + j]))
 
-                # If there's a red traffic light within the look-ahead waypoints, decelerate to a complete stop at the red light waypoint.
+                # If there's a red traffic light within the look-ahead waypoints, decelerate to a complete
+                # stop at the red light waypoint.
                 # TODO: Acceleration should not exceed 10 m/s^2 and jerk should not exceed 10 m/s^3
                 if (self.redLight_wp != -1):
-                    if (self.redLight_wp >= closest) and (self.redLight_wp < (closest + LOOKAHEAD_WPS)):
-                        stopHere = self.redLight_wp - closest
-                        waypoints = self.decelerate(waypoints, stopHere)
+                    stopHere = self.redLight_wp - closest
+                    if stopHere <= required_stopping_distance:
+                        x.append(stopHere-2)
+                        y.append(0)
+                        x.append(stopHere+98)
+                        y.append(0)
+                        x.append(stopHere+198)
+                        y.append(0)
+                        s = inter.InterpolatedUnivariateSpline(x, y)
+                        for i in range(0,len(waypoints)-1):
+                            vel = s(i)
+                            if vel < 1.0:
+                                vel = 0.0
+                            if math.isnan(vel):
+                                vel = 0.0
+                            self.set_waypoint_velocity(waypoints, i, vel)
 
                 self.publish(waypoints)
                             
@@ -140,6 +190,9 @@ class WaypointUpdater(object):
     def obstacle_cb(self, msg):
         self.obstacle_wp = msg.data
 
+    def current_velocity_cb(self, msg):
+		self.current_velocity = msg.twist.linear.x  # simlulator returns velocity in mps
+
     def get_waypoint_velocity(self, waypoint):
         return waypoint.twist.twist.linear.x
 
@@ -158,73 +211,6 @@ class WaypointUpdater(object):
         dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)
         dist = dl(pose1.position, pose2.position)
         return dist
-
-    def decelerate(self, waypoints, stopHere):
-        last = waypoints[stopHere]
-        dist = self.distance2(waypoints[0].pose.pose, last.pose.pose)
-        for i in range(0,stopHere):
-            dist = self.distance2(waypoints[i].pose.pose, last.pose.pose)
-            vel = math.sqrt(2 * MAX_DECEL * dist)   # A minimum jerk formula would probalby work better here
-            if vel < 1.:
-                vel = 0.
-            waypoints[i].twist.twist.linear.x = min(vel, waypoints[i].twist.twist.linear.x)
-        # Set all waypoints past stopping point to 0mph
-        for i in range(stopHere,len(waypoints)-1):
-            waypoints[i].twist.twist.linear.x = 0.
-        return waypoints
-
-    # Calculate the Jerk Minimizing Trajectory that connects the initial state
-    # to the final state in time T.
-    #
-    # INPUTS
-    # 
-    #     start - the vehicles start location given as a length three array corresponding to initial
-    #             values of [location, velocity, acceleration], aka [s, s_dot, s_double_dot]
-    # 
-    #     end   - the desired end state for vehicle. Like "start" this is a length three array.
-    # 
-    #     T     - The duration, in seconds, over which this maneuver should occur.
-    # 
-    # OUTPUT 
-    #
-    #     An array of length 6, each value corresponding to a coefficent in the polynomial:
-    #       s(t) = a_0 + a_1 * t + a_2 * t**2 + a_3 * t**3 + a_4 * t**4 + a_5 * t**5
-    # 
-    # EXAMPLE
-    # 
-    #     > JMT( [0, 10, 0], [10, 10, 0], 1)
-    #     [0.0, 10.0, 0.0, 0.0, 0.0, 0.0]
-    def JMT(start, end, T):
-        """
-        Calculates Jerk Minimizing Trajectory for start, end and T.
-        """
-        t2 = T*T;
-        t3 = t2*T;
-        t4 = t3*T;
-        t5 = t4*T;
-
-        A = np.array([
-                [   t3,   t4,    t5],
-                [ 3*t2, 4*t3,  5*t4],
-                [ 6*T, 12*t2, 20*t3],
-            ])
-
-        a_0, a_1, a_2 = start[0], start[1], start[2] / 2.0
-        c_0 = a_0 + a_1 * T + a_2 * T**2
-        c_1 = a_1 + 2* a_2 * T
-        c_2 = 2 * a_2
-
-        B = np.array([
-                end[0] - c_0,
-                end[1] - c_1,
-                end[2] - c_2
-            ])
-
-        a_3_4_5 = np.linalg.solve(A,B)
-        alphas = np.concatenate([np.array([a_0, a_1, a_2]), a_3_4_5])
-
-        return alphas
-
 
 if __name__ == '__main__':
     try:
