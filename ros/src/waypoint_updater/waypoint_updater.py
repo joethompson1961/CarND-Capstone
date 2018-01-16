@@ -27,7 +27,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. You can change this number
 MAX_DECEL = 1.0 
 
 class WaypointUpdater(object):
@@ -53,33 +53,45 @@ class WaypointUpdater(object):
         rate = rospy.Rate(50) # 50Hz
         prev_closest = -1
         waypoints = []
-        cruising = 1
+        prev_j = -1
         while not rospy.is_shutdown():
             j = 0
             #start with a long distance since this number will be decreasing as waypoints are measured
             dist = 1000000.0
             if (self.all_waypoints != None) and (self.pose != None):
                 #search for the closest point to the pose and store index
-                #TODO: this could be improved by looking only close to the last closer point instead of all points
-                for i in range(0,self.num_waypoints-1):
-                    waypoint = self.all_waypoints[i]
-                    if self.distance2(waypoint.pose.pose,self.pose)<dist:
-                        dist = self.distance2(waypoint.pose.pose,self.pose)
-                        j = i
+                #only look close to the last closer point instead of all points
+                pose = copy.deepcopy(self.pose)
+                if prev_j == -1:
+                    # first pass need to find position within all waypoints
+                    for i in range(0,self.num_waypoints-1):
+                        waypoint = self.all_waypoints[i]
+                        if self.distance2(waypoint.pose.pose, pose)<dist:
+                            dist = self.distance2(waypoint.pose.pose, pose)
+                            j = i
+                else:
+                    # after first pass only search nearby waypoints [prev-20:prev+30]
+                    for k in range(0, 50):
+                        i = (prev_j + k) % self.num_waypoints
+                        waypoint = self.all_waypoints[i]
+                        if self.distance2(waypoint.pose.pose, pose) < dist:
+                            dist = self.distance2(waypoint.pose.pose, pose)
+                            j = i
+                prev_j = j
 
                 #convert quaternion to roll pitch and yaw (yaw is what we need)
-                explicit_quat = [self.pose.orientation.x, self.pose.orientation.y, self.pose.orientation.z, self.pose.orientation.w]
+                explicit_quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
                 roll, pitch, yaw = tf.transformations.euler_from_quaternion(explicit_quat)
                 
                 #obtain indices for 3 closest points based on the closest point
-                j_0 = (j-1)%self.num_waypoints
+                j_0 = (j-1 + self.num_waypoints) % self.num_waypoints
                 j_1 = j%self.num_waypoints
                 j_2 = (j+1)%self.num_waypoints
 
                 #calculate angle of 3 closest points and pose point
-                angle_0 = math.atan2(self.all_waypoints[j_0].pose.pose.position.y-self.pose.position.y,self.all_waypoints[j_0].pose.pose.position.x-self.pose.position.x)
-                angle_1 = math.atan2(self.all_waypoints[j_1].pose.pose.position.y-self.pose.position.y,self.all_waypoints[j_1].pose.pose.position.x-self.pose.position.x)
-                angle_2 = math.atan2(self.all_waypoints[j_2].pose.pose.position.y-self.pose.position.y,self.all_waypoints[j_2].pose.pose.position.x-self.pose.position.x)
+                angle_0 = math.atan2(self.all_waypoints[j_0].pose.pose.position.y-pose.position.y,self.all_waypoints[j_0].pose.pose.position.x-pose.position.x)
+                angle_1 = math.atan2(self.all_waypoints[j_1].pose.pose.position.y-pose.position.y,self.all_waypoints[j_1].pose.pose.position.x-pose.position.x)
+                angle_2 = math.atan2(self.all_waypoints[j_2].pose.pose.position.y-pose.position.y,self.all_waypoints[j_2].pose.pose.position.x-pose.position.x)
                 
                 #calculate angle in range of 0 to 360 instead of 0 180, 0 -180
                 angle_0 = (math.degrees(angle_0) + 360) % 360;
@@ -91,7 +103,7 @@ class WaypointUpdater(object):
                 angle_0 = math.fabs(angle_0 - yaw)
                 angle_1 = math.fabs(angle_1 - yaw)
                 angle_2 = math.fabs(angle_2 - yaw)
-                
+               
                 #select direction based on the angle of the 2nd and 3rd closest points
                 direction = 1 #assume it goes up
                 if math.fabs(angle_0-180) > math.fabs(angle_2-180):
@@ -127,7 +139,7 @@ class WaypointUpdater(object):
                 # Adjust stopping distance for current speed.
                 # Current_velocity is in mps. Each multiple of 25MPH requires approx 30 waypoints stopping distance.
                 # Required_stopping_distance is proportional to the current top speed.
-                required_stopping_distance = self.get_waypoint_velocity(self.all_waypoints[closest]) * 3.5
+                required_stopping_distance = self.get_waypoint_velocity(self.all_waypoints[closest]) * 2.75
 
                 waypoints[:] = []  # clear the waypoint list
                 #select the N waypoints that will be published (closer ones in front of the car)
