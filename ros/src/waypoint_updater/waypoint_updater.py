@@ -55,14 +55,15 @@ class WaypointUpdater(object):
 
     def loop(self):
         rate = rospy.Rate(50) # 50Hz
-        prev_j = -1
+        prev_closest = -1
         stopping = 1
         cruising = 0
         stopHere = 0
         ref_vel = 0.0
         brake_wp_start = 0
+        direction = 1 #assume it goes up
         while not rospy.is_shutdown():
-            j = 0
+            closest = 0
             #start with a long distance since this number will be decreasing as waypoints are measured
             dist = 1000000.0
             if (self.all_waypoints != None) and (self.pose != None):
@@ -70,75 +71,66 @@ class WaypointUpdater(object):
                 #search for the closest point to the pose and store index
                 #only look close to the last closer point instead of all points
                 pose = copy.deepcopy(self.pose)
-                if prev_j == -1:
-                    speed_lmt = self.get_waypoint_velocity(self.all_waypoints[0])
-                    # first pass need to find position within all waypoints
+                if prev_closest == -1:
+                    # first pass need to find position within all waypoints and determine direction of travel
                     for i in range(0, self.num_waypoints-1):
                         wp = self.all_waypoints[i]
                         if self.distance2(wp.pose.pose, pose) < dist:
                             dist = self.distance2(wp.pose.pose, pose)
-                            j = i
+                            closest = i
+
+                    #convert quaternion to roll pitch and yaw (yaw is what we need)
+                    explicit_quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+                    roll, pitch, yaw = tf.transformations.euler_from_quaternion(explicit_quat)
+
+                    #obtain indices for 3 closest points based on the closest point
+                    c_0 = (closest-1 + self.num_waypoints) % self.num_waypoints
+                    c_1 = closest
+                    c_2 = (closest+1)%self.num_waypoints
+
+                    #calculate angle of 3 closest points and pose point
+                    angle_0 = math.atan2(self.all_waypoints[c_0].pose.pose.position.y-pose.position.y,self.all_waypoints[c_0].pose.pose.position.x-pose.position.x)
+                    angle_1 = math.atan2(self.all_waypoints[c_1].pose.pose.position.y-pose.position.y,self.all_waypoints[c_1].pose.pose.position.x-pose.position.x)
+                    angle_2 = math.atan2(self.all_waypoints[c_2].pose.pose.position.y-pose.position.y,self.all_waypoints[c_2].pose.pose.position.x-pose.position.x)
+
+                    #calculate angle in range of 0 to 360 instead of 0 180, 0 -180
+                    angle_0 = (math.degrees(angle_0) + 360) % 360;
+                    angle_1 = (math.degrees(angle_1) + 360) % 360;
+                    angle_2 = (math.degrees(angle_2) + 360) % 360;
+                    yaw = (math.degrees(yaw) + 360) % 360;
+
+                    #calculate angle between car and 3 closest points
+                    angle_0 = math.fabs(angle_0 - yaw)
+                    angle_1 = math.fabs(angle_1 - yaw)
+                    angle_2 = math.fabs(angle_2 - yaw)
+
+                    #select direction based on the angle of the 2nd and 3rd closest points
+                    if math.fabs(angle_0-180) > math.fabs(angle_2-180):
+                        direction = -1  #goes downstream
                 else:
                     # after first pass only waypoints near where we were last time
                     for k in range(0, 50):
-                        i = (prev_j + k) % self.num_waypoints
+                        i = (prev_closest + k) % self.num_waypoints
                         wp = self.all_waypoints[i]
                         if self.distance2(wp.pose.pose, pose) < dist:
                             dist = self.distance2(wp.pose.pose, pose)
-                            j = i
-                prev_j = j
-
-                #convert quaternion to roll pitch and yaw (yaw is what we need)
-                explicit_quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
-                roll, pitch, yaw = tf.transformations.euler_from_quaternion(explicit_quat)
-                
-                #obtain indices for 3 closest points based on the closest point
-                j_0 = (j-1 + self.num_waypoints) % self.num_waypoints
-                j_1 = j%self.num_waypoints
-                j_2 = (j+1)%self.num_waypoints
-
-                #calculate angle of 3 closest points and pose point
-                angle_0 = math.atan2(self.all_waypoints[j_0].pose.pose.position.y-pose.position.y,self.all_waypoints[j_0].pose.pose.position.x-pose.position.x)
-                angle_1 = math.atan2(self.all_waypoints[j_1].pose.pose.position.y-pose.position.y,self.all_waypoints[j_1].pose.pose.position.x-pose.position.x)
-                angle_2 = math.atan2(self.all_waypoints[j_2].pose.pose.position.y-pose.position.y,self.all_waypoints[j_2].pose.pose.position.x-pose.position.x)
-                
-                #calculate angle in range of 0 to 360 instead of 0 180, 0 -180
-                angle_0 = (math.degrees(angle_0) + 360) % 360;
-                angle_1 = (math.degrees(angle_1) + 360) % 360;
-                angle_2 = (math.degrees(angle_2) + 360) % 360;
-                yaw = (math.degrees(yaw) + 360) % 360;
-               
-                #calculate angle between car and 3 closest points
-                angle_0 = math.fabs(angle_0 - yaw)
-                angle_1 = math.fabs(angle_1 - yaw)
-                angle_2 = math.fabs(angle_2 - yaw)
-               
-                #select direction based on the angle of the 2nd and 3rd closest points
-                direction = 1 #assume it goes up
-                if math.fabs(angle_0-180) > math.fabs(angle_2-180):
-                    direction = -1  #goes downstream
-                if direction == -1:
-                    rospy.logwarn("DOWNSTREAM")
+                            closest = i
+                prev_closest = closest
                 
                 #skip a few waypoints to make sure they are in front of the car
-                #TODO: it may be better to do this based on distance using distance() function
-#                accum = 4*direction
-#                closest = j + 4*direction
-
                 accum = 0
-                if angle_1 > 90:  # closest point is behind the car, but need closest in front of car
-                    j += 1               
-                closest = j
+                closest += 1   # ensures closest point is in front of car
 
                 # If not in stopping mode then check if stop is needed                                
                 if (stopping == 0):
-                    # If there's a red traffic light within the look-ahead waypoints, decelerate to a complete
-                    # stop at the red light waypoint.
                     if (self.redLight_wp != -1):
+                        # Red light ahead. If it's within the required stopping distance range, generate
+                        # trajectory that decelerates to a complete stop at the red light stopline waypoint.
                         stopHere = self.redLight_wp - closest
-                        # Calculate number of waypoints required to stop for the current speed.
-                        # Current_velocity is in mps. Each multiple of 25MPH requires approx 30 waypoints stopping distance.
-                        # Required_stopping_distance is proportional to the current top speed.
+                        # Required stopping distance is the number of waypoints required to stop. It's
+                        # proportional to current velocity. At 25mph it takes approximately 30 waypoints
+                        # to stop without exceeding max accel and jerk requirements. The velocity conversion
+                        # factor of "3.0" converts velocity (mps) to distance (waypoints).  
                         required_stopping_points = int(math.ceil(self.get_waypoint_velocity(self.all_waypoints[closest]) * 3.0))
                         if stopHere <= required_stopping_points:
                             # Stop is needed
@@ -151,9 +143,9 @@ class WaypointUpdater(object):
                             x = []
                             y = []
                             x.append(0)
-                            y.append(self.get_waypoint_velocity(self.all_waypoints[j-1]))  # start at current velocity
+                            y.append(self.get_waypoint_velocity(self.all_waypoints[closest-1]))  # start at current velocity
                             x.append(1)
-                            y.append(self.get_waypoint_velocity(self.all_waypoints[j-1]))
+                            y.append(self.get_waypoint_velocity(self.all_waypoints[closest-1]))
                             x.append(stopHere-2)
                             y.append(0)            # down to zero velocity just before stopline
                             x.append(stopHere+20)
@@ -173,14 +165,14 @@ class WaypointUpdater(object):
                             s = inter.InterpolatedUnivariateSpline(x, y)
     
                             # set target velocities in waypoints ahead to come to a stop at the stopline
-                            brake_wp_start = j
+                            brake_wp_start = closest
                             for i in range(0, LOOKAHEAD_WPS-1):
                                 ref_vel = s(i+1)
                                 if ref_vel < 0.5:
                                     ref_vel = 0.0
                                 if math.isnan(ref_vel):
                                     ref_vel = 0.0
-                                self.set_waypoint_velocity(self.all_waypoints, accum+j, ref_vel)
+                                self.set_waypoint_velocity(self.all_waypoints, accum+closest, ref_vel)
                                 accum = (accum + direction + self.num_waypoints) % self.num_waypoints
                 else:
                     # if stopping mode keep checking for red light to clear
@@ -191,7 +183,7 @@ class WaypointUpdater(object):
                         cruising = 1
                         # restore velocities to speed limit for all previous waypoint velocities that were overridden for braking
                         for i in range(brake_wp_start, closest):
-                            self.set_waypoint_velocity(self.all_waypoints, closest - i, self.speed_lmt)
+                            self.set_waypoint_velocity(self.all_waypoints, closest-i, self.speed_lmt)
 
                         ref_vel = 0.0
                         accum = 0
@@ -203,7 +195,7 @@ class WaypointUpdater(object):
                                 ref_vel += (0.9* (1 - ref_vel/self.speed_lmt));
                             elif (ref_vel > self.speed_lmt):
                                 ref_vel -= (0.9 * (1 - self.speed_lmt/ref_vel));
-                            self.set_waypoint_velocity(self.all_waypoints, accum + closest, ref_vel)
+                            self.set_waypoint_velocity(self.all_waypoints, accum+closest, ref_vel)
                             accum = (accum + direction + self.num_waypoints) % self.num_waypoints
 
                 #select the N waypoints that will be published (closer ones in front of the car)
