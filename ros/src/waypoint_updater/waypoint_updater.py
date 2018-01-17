@@ -78,52 +78,56 @@ class WaypointUpdater(object):
                         if self.distance2(wp.pose.pose, pose) < dist:
                             dist = self.distance2(wp.pose.pose, pose)
                             closest = i
-
-                    #convert quaternion to roll pitch and yaw (yaw is what we need)
-                    explicit_quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
-                    roll, pitch, yaw = tf.transformations.euler_from_quaternion(explicit_quat)
-
-                    #obtain indices for 3 closest points based on the closest point
-                    c_0 = (closest-1 + self.num_waypoints) % self.num_waypoints
-                    c_1 = closest
-                    c_2 = (closest+1)%self.num_waypoints
-
-                    #calculate angle of 3 closest points and pose point
-                    angle_0 = math.atan2(self.all_waypoints[c_0].pose.pose.position.y-pose.position.y,self.all_waypoints[c_0].pose.pose.position.x-pose.position.x)
-                    angle_1 = math.atan2(self.all_waypoints[c_1].pose.pose.position.y-pose.position.y,self.all_waypoints[c_1].pose.pose.position.x-pose.position.x)
-                    angle_2 = math.atan2(self.all_waypoints[c_2].pose.pose.position.y-pose.position.y,self.all_waypoints[c_2].pose.pose.position.x-pose.position.x)
-
-                    #calculate angle in range of 0 to 360 instead of 0 180, 0 -180
-                    angle_0 = (math.degrees(angle_0) + 360) % 360;
-                    angle_1 = (math.degrees(angle_1) + 360) % 360;
-                    angle_2 = (math.degrees(angle_2) + 360) % 360;
-                    yaw = (math.degrees(yaw) + 360) % 360;
-
-                    #calculate angle between car and 3 closest points
-                    angle_0 = math.fabs(angle_0 - yaw)
-                    angle_1 = math.fabs(angle_1 - yaw)
-                    angle_2 = math.fabs(angle_2 - yaw)
-
-                    #select direction based on the angle of the 2nd and 3rd closest points
-                    if math.fabs(angle_0-180) > math.fabs(angle_2-180):
-                        direction = -1  #goes downstream
                 else:
                     # after first pass only waypoints near where we were last time
-                    for k in range(0, 50):
+                    for k in range(-20, 50):
+                        k *= direction
                         i = (prev_closest + k) % self.num_waypoints
+                        i = (i + self.num_waypoints) % self.num_waypoints
                         wp = self.all_waypoints[i]
                         if self.distance2(wp.pose.pose, pose) < dist:
                             dist = self.distance2(wp.pose.pose, pose)
                             closest = i
+
+                #convert quaternion to roll pitch and yaw (yaw is what we need)
+                explicit_quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+                roll, pitch, yaw = tf.transformations.euler_from_quaternion(explicit_quat)
+
+                #obtain indices for 3 closest points based on the closest point
+                c_0 = (closest-1 + self.num_waypoints) % self.num_waypoints
+                c_1 = closest
+                c_2 = (closest+1)%self.num_waypoints
+
+                #calculate angle of 3 closest points and pose point
+                angle_0 = math.atan2(self.all_waypoints[c_0].pose.pose.position.y-pose.position.y,self.all_waypoints[c_0].pose.pose.position.x-pose.position.x)
+                angle_1 = math.atan2(self.all_waypoints[c_1].pose.pose.position.y-pose.position.y,self.all_waypoints[c_1].pose.pose.position.x-pose.position.x)
+                angle_2 = math.atan2(self.all_waypoints[c_2].pose.pose.position.y-pose.position.y,self.all_waypoints[c_2].pose.pose.position.x-pose.position.x)
+
+                #calculate angle in range of 0 to 360 instead of 0 180, 0 -180
+                angle_0 = (math.degrees(angle_0) + 360) % 360;
+                angle_1 = (math.degrees(angle_1) + 360) % 360;
+                angle_2 = (math.degrees(angle_2) + 360) % 360;
+                yaw = (math.degrees(yaw) + 360) % 360;
+
+                #calculate angle between car and 3 closest points
+                angle_0 = math.fabs(angle_0 - yaw)
+                angle_1 = math.fabs(angle_1 - yaw)
+                angle_2 = math.fabs(angle_2 - yaw)
+
+                #first pass only select direction based on the angle of the 2nd and 3rd closest points
+                if (prev_closest == -1) and (math.fabs(angle_0-180) > math.fabs(angle_2-180)):
+                    direction = -1  #goes downstream
+			
+    			# ensures closest point is in front of car
+                if (angle_1 > 90) and (angle_1 < 270):
+                    closest += direction   
+
                 prev_closest = closest
                 
-                #skip a few waypoints to make sure they are in front of the car
-                accum = 0
-                closest += 1   # ensures closest point is in front of car
-
                 # If not in stopping mode then check if stop is needed                                
                 if (stopping == 0):
                     if (self.redLight_wp != -1):
+                        # TODO: don't assume distance between waypoints is always 1 meter.  Use distance() function instead.
                         # Red light ahead. If it's within the required stopping distance range, generate
                         # trajectory that decelerates to a complete stop at the red light stopline waypoint.
                         stopHere = self.redLight_wp - closest
@@ -166,6 +170,7 @@ class WaypointUpdater(object):
     
                             # set target velocities in waypoints ahead to come to a stop at the stopline
                             brake_wp_start = closest
+                            accum = 0
                             for i in range(0, LOOKAHEAD_WPS-1):
                                 ref_vel = s(i+1)
                                 if ref_vel < 0.5:
