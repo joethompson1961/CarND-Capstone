@@ -97,8 +97,8 @@ class WaypointUpdater(object):
 
                 #obtain indices for 3 closest points based on the closest point
                 c_0 = (closest-1 + self.num_waypoints) % self.num_waypoints
-                c_1 = closest
-                c_2 = (closest+1)%self.num_waypoints
+                c_1 = closest % self.num_waypoints
+                c_2 = (closest+1) % self.num_waypoints
 
                 #calculate angle of 3 closest points and pose point
                 angle_0 = math.atan2(self.all_waypoints[c_0].pose.pose.position.y-pose.position.y,self.all_waypoints[c_0].pose.pose.position.x-pose.position.x)
@@ -215,7 +215,8 @@ class WaypointUpdater(object):
 
                 #select the N waypoints that will be published (closer ones in front of the car)
                 waypoints = []
-                ref_vel = self.get_waypoint_velocity(self.all_waypoints[closest-1])
+                j = (closest - direction + self.num_waypoints) % self.num_waypoints
+                ref_vel = self.get_waypoint_velocity(self.all_waypoints[j])
                 for i in range(0, LOOKAHEAD_WPS-1):
 
                     # Set waypoint velocity
