@@ -128,8 +128,8 @@ class WaypointUpdater(object):
                 
                 # If not in stopping mode then check if stop is needed                                
                 if (stopping == 0):
-                    if (self.redLight_wp != -1):
-                        # Red light ahead. If it's within the required stopping distance range, generate
+                    if (self.redLight_wp != -1) and (self.redLight_wp < (closest + 150)):
+                        # Red light close ahead. If it's within the required stopping distance range, generate
                         # trajectory that decelerate to a complete stop at the red light stopline waypoint.
                         stopHere = self.redLight_wp - closest
  
@@ -186,7 +186,7 @@ class WaypointUpdater(object):
                                 self.set_waypoint_velocity(self.all_waypoints, j, ref_vel)
                 else:
                     # if stopping mode keep checking for red light to clear
-                    if (self.redLight_wp == -1):
+                    if (self.redLight_wp == -1) or (self.redLight_wp > (closest + 150)):
 
                         # when red light clears return to cruising mode
 #                        rospy.logwarn("cruising")
