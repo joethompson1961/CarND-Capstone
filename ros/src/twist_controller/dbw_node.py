@@ -82,16 +82,16 @@ class DBWNode(object):
 #            rospy.logwarn('throttle: %f  brake: %f  steering: %f', throttle, brake, steering)
 
             if self.dbw:
-	            self.publish(throttle, brake, steering)
+                self.publish(throttle, brake, steering)
             rate.sleep()
-	
+    
     def current_velocity_cb(self, msg):
-		self.current_velocity = msg.twist.linear.x  # simlulator returns velocity in mps
-		
+        self.current_velocity = msg.twist.linear.x  # simlulator returns velocity in mps
+        
     def twist_cmd_cb(self, msg):
-		self.linear_velocity = msg.twist.linear.x
-		self.angular_velocity = msg.twist.angular.z
-		
+        self.linear_velocity = msg.twist.linear.x
+        self.angular_velocity = msg.twist.angular.z
+        
     def dbw_enabled_cb(self, msg):
         self.dbw = msg
         rospy.logwarn('drive by wire: %s', msg)        
