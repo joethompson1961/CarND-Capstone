@@ -6,15 +6,15 @@ GAS_DENSITY = 2.858
 ONE_MPH = 0.44704   # convert miles per hour to meters per second
 TIME_STEP = 0.02    # 50Hz actuator update rate = 0.02 seconds timestep
 
-T_PID_P = 1.25
-T_PID_I = 0.5
-T_PID_D = 0.0001
-T_TAU   = 0.3  # lower tau = higher LPF cutoff frequency (tau = 0 : passthru filter, no cutoff)
+T_PID_P = 1.00
+T_PID_I = 0.05
+T_PID_D = 0.001
+T_TAU   = 0.3  # lower tau --> higher cutoff frequency (tau = 0 --> passthru filter, no cutoff)
 
-S_PID_P = 1.75 
-S_PID_I = 0.0001
-S_PID_D = 0.0002
-S_TAU   = 0.15  # lower tau = higher LPF cutoff frequency (tau = 0 : passthru filter, no cutoff)
+S_PID_P = 1.65
+S_PID_I = 0.085
+S_PID_D = 0.0001
+S_TAU   = 0.15  # lower --> higher LPF cutoff frequency (tau = 0 --> passthru filter, no cutoff)
 
 MAX_BRAKE_PRESSURE = 5000
 
@@ -40,7 +40,7 @@ class Controller(object):
         tgt_throttle = 1.0*(linear_velocity - current_velocity)
         throttle = tgt_throttle
         throttle = self.throttlePID.step(throttle, TIME_STEP) 
-        throttle = self.throttleLPF.filt(throttle)
+#        throttle = self.throttleLPF.filt(throttle)
 
         # Negative throttle equals braking.  Braking needs to be converted to N*m.
         brake = 0.

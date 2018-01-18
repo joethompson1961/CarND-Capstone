@@ -58,9 +58,11 @@ class WaypointUpdater(object):
         prev_closest = -1
         stopping = 1
         cruising = 0
+        accelerating = 0
         stopHere = 0
         ref_vel = 0.0
         brake_wp_start = 0
+        accel_wp_start = 0
         direction = 1 #assume it goes up
         while not rospy.is_shutdown():
             closest = 0
@@ -79,15 +81,15 @@ class WaypointUpdater(object):
                             dist = self.distance2(wp.pose.pose, pose)
                             closest = i
                 else:
-                    # after first pass only waypoints near where we were last time
-                    for k in range(-20, 50):
-                        k *= direction
-                        i = (prev_closest + k) % self.num_waypoints
-                        i = (i + self.num_waypoints) % self.num_waypoints
-                        wp = self.all_waypoints[i]
+                    # after first pass only search waypoints near where we were last time
+                    for i in range(-40, 40):
+                        j = (i + prev_closest + self.num_waypoints) % self.num_waypoints
+                        wp = self.all_waypoints[j]
                         if self.distance2(wp.pose.pose, pose) < dist:
                             dist = self.distance2(wp.pose.pose, pose)
-                            closest = i
+                            closest = j
+                        if ((closest - prev_closest) * direction) < 0:
+                            closest = prev_closest  # don't allow noisy pose to head backwards
 
                 #convert quaternion to roll pitch and yaw (yaw is what we need)
                 explicit_quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
@@ -95,8 +97,8 @@ class WaypointUpdater(object):
 
                 #obtain indices for 3 closest points based on the closest point
                 c_0 = (closest-1 + self.num_waypoints) % self.num_waypoints
-                c_1 = closest
-                c_2 = (closest+1)%self.num_waypoints
+                c_1 = closest % self.num_waypoints
+                c_2 = (closest+1) % self.num_waypoints
 
                 #calculate angle of 3 closest points and pose point
                 angle_0 = math.atan2(self.all_waypoints[c_0].pose.pose.position.y-pose.position.y,self.all_waypoints[c_0].pose.pose.position.x-pose.position.x)
@@ -118,7 +120,7 @@ class WaypointUpdater(object):
                 if (prev_closest == -1) and (math.fabs(angle_0-180) > math.fabs(angle_2-180)):
                     direction = -1  #goes downstream
 			
-    			# ensures closest point is in front of car
+    			# if closest is behind current pose select next waypoint which is hopefully in front of car
                 if (angle_1 > 90) and (angle_1 < 270):
                     closest += direction   
 
@@ -127,18 +129,20 @@ class WaypointUpdater(object):
                 # If not in stopping mode then check if stop is needed                                
                 if (stopping == 0):
                     if (self.redLight_wp != -1):
-                        # TODO: don't assume distance between waypoints is always 1 meter.  Use distance() function instead.
                         # Red light ahead. If it's within the required stopping distance range, generate
-                        # trajectory that decelerates to a complete stop at the red light stopline waypoint.
+                        # trajectory that decelerate to a complete stop at the red light stopline waypoint.
                         stopHere = self.redLight_wp - closest
+ 
                         # Required stopping distance is the number of waypoints required to stop. It's
                         # proportional to current velocity. At 25mph it takes approximately 30 waypoints
                         # to stop without exceeding max accel and jerk requirements. The velocity conversion
                         # factor of "3.0" converts velocity (mps) to distance (waypoints).  
-                        required_stopping_points = int(math.ceil(self.get_waypoint_velocity(self.all_waypoints[closest]) * 3.0))
-                        if stopHere <= required_stopping_points:
+                        distance_to_stopline = self.distance(self.all_waypoints, closest, self.redLight_wp)
+                        required_stopping_distance = self.get_waypoint_velocity(self.all_waypoints[closest]) * 2.75
+                        if distance_to_stopline <= required_stopping_distance:
                             # Stop is needed
-                            rospy.logwarn("stopping")
+#                            rospy.logwarn("dist to stop:%f   req'd distance:%f  closest:%i  redlight:%i", distance_to_stopline, required_stopping_distance, closest, self.redLight_wp)
+#                            rospy.logwarn("stopping")
                             stopping = 1
                             cruising = 0
 
@@ -146,70 +150,78 @@ class WaypointUpdater(object):
                             # Setup the spline anchor points
                             x = []
                             y = []
+                            j = (closest - direction + self.num_waypoints) % self.num_waypoints 
                             x.append(0)
-                            y.append(self.get_waypoint_velocity(self.all_waypoints[closest-1]))  # start at current velocity
+                            y.append(self.get_waypoint_velocity(self.all_waypoints[j])) # start at current velocity
                             x.append(1)
-                            y.append(self.get_waypoint_velocity(self.all_waypoints[closest-1]))
-                            x.append(stopHere-2)
-                            y.append(0)            # down to zero velocity just before stopline
-                            x.append(stopHere+20)
-                            y.append(0)            
-                            x.append(stopHere+40)
-                            y.append(0)            
-                            x.append(stopHere+60)
-                            y.append(0)
-                            x.append(stopHere+80)
-                            y.append(0)
-                            x.append(stopHere+100)
-                            y.append(0)
-                            x.append(stopHere+200)
-                            y.append(0)
+                            y.append(self.get_waypoint_velocity(self.all_waypoints[j]))
+                            x.append(stopHere)
+                            y.append(0)                                                 # bring it down to zero at stopline
+                            for i in range (1, 20):
+                                x.append(stopHere+i*10)
+                                y.append(0)            
     
                             # initialize spline
                             s = inter.InterpolatedUnivariateSpline(x, y)
     
-                            # set target velocities in waypoints ahead to come to a stop at the stopline
                             brake_wp_start = closest
-                            accum = 0
+                            # restore global waypoint velocities to speed limit (those that were overridden for last acceleration)
                             for i in range(0, LOOKAHEAD_WPS-1):
+                                j = (i*direction + accel_wp_start + self.num_waypoints) % self.num_waypoints
+                                self.set_waypoint_velocity(self.all_waypoints, j, self.speed_lmt)
+
+                            # set target velocities in waypoints ahead to come to a stop at the stopline
+                            for i in range(0, LOOKAHEAD_WPS-1):
+
+                                # Use spline to gracefully bring to stop
                                 ref_vel = s(i+1)
                                 if ref_vel < 0.5:
                                     ref_vel = 0.0
                                 if math.isnan(ref_vel):
                                     ref_vel = 0.0
-                                self.set_waypoint_velocity(self.all_waypoints, accum+closest, ref_vel)
-                                accum = (accum + direction + self.num_waypoints) % self.num_waypoints
+ #                               rospy.logwarn("ref_vel: %f", ref_vel)
+
+                                # Set waypoint velocity
+                                j = (i*direction + closest + self.num_waypoints) % self.num_waypoints # convert "i" to global waypoint number
+                                self.set_waypoint_velocity(self.all_waypoints, j, ref_vel)
                 else:
                     # if stopping mode keep checking for red light to clear
                     if (self.redLight_wp == -1):
-                        rospy.logwarn("cruising")
+
                         # when red light clears return to cruising mode
+#                        rospy.logwarn("cruising")
                         stopping = 0
                         cruising = 1
-                        # restore velocities to speed limit for all previous waypoint velocities that were overridden for braking
-                        for i in range(brake_wp_start, closest):
-                            self.set_waypoint_velocity(self.all_waypoints, closest-i, self.speed_lmt)
+
+                        accel_wp_start = closest
+                        # restore global waypoint velocities to speed limit (those that were overridden for last braking)
+                        for i in range(0, LOOKAHEAD_WPS-1):
+                            j = (i*direction + brake_wp_start + self.num_waypoints) % self.num_waypoints
+                            self.set_waypoint_velocity(self.all_waypoints, j, self.speed_lmt)
 
                         ref_vel = 0.0
-                        accum = 0
                         for i in range(0, LOOKAHEAD_WPS-1):
-                            # For cruising overwrite old junk velocities in waypoints with current target velocities
-                            # For stopping the waypoint velocities have already been configured up above
+
                             # Use proportional control to gracefully bring car to speed
                             if (ref_vel < self.speed_lmt):
-                                ref_vel += (0.9* (1 - ref_vel/self.speed_lmt));
+                                ref_vel += (1.0* (1 - ref_vel/self.speed_lmt));
                             elif (ref_vel > self.speed_lmt):
-                                ref_vel -= (0.9 * (1 - self.speed_lmt/ref_vel));
-                            self.set_waypoint_velocity(self.all_waypoints, accum+closest, ref_vel)
-                            accum = (accum + direction + self.num_waypoints) % self.num_waypoints
+                                ref_vel -= (1.0 * (1 - self.speed_lmt/ref_vel));
+ #                           rospy.logwarn("ref_vel: %f", ref_vel)
+
+                            # Set waypoint velocity
+                            j = (i*direction + closest + self.num_waypoints) % self.num_waypoints # convert "i" to global waypoint number
+                            self.set_waypoint_velocity(self.all_waypoints, j, ref_vel)
 
                 #select the N waypoints that will be published (closer ones in front of the car)
                 waypoints = []
-                ref_vel = self.get_waypoint_velocity(self.all_waypoints[closest-1])
-                accum = 0
+                j = (closest - direction + self.num_waypoints) % self.num_waypoints
+                ref_vel = self.get_waypoint_velocity(self.all_waypoints[j])
                 for i in range(0, LOOKAHEAD_WPS-1):
-                    waypoints.append(self.all_waypoints[accum + closest])
-                    accum = (accum + direction + self.num_waypoints) % self.num_waypoints
+
+                    # Set waypoint velocity
+                    j = (i*direction + closest + self.num_waypoints) % self.num_waypoints
+                    waypoints.append(self.all_waypoints[j])
 
                 self.publish(waypoints)
 
