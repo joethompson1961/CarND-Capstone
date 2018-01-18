@@ -47,7 +47,6 @@ class TLClassifier(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        #TODO implement light color prediction
         
         img = cv2.resize(src=image, dsize=(IN_IMAGE_HEIGHT,IN_IMAGE_WIDTH))
         img = img.astype(float)
