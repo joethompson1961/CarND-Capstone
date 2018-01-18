@@ -12,7 +12,7 @@ import cv2
 import yaml
 import math
 
-STATE_COUNT_THRESHOLD = 3
+STATE_COUNT_THRESHOLD = 2 #was 3
 
 class TLDetector(object):
     def __init__(self):
@@ -52,9 +52,9 @@ class TLDetector(object):
         self.listener = tf.TransformListener()
 
       
-        print "Waiting for base waypoints......"
+        print ("Waiting for base waypoints......")
         rospy.wait_for_message('/base_waypoints', Lane)
-        print "Proceeding with base waypoints...."
+        print ("Proceeding with base waypoints....")
         # List of points that correspond to the stopping line for a given intersection. Converting to easier processing format/
         for stop_pt in self.config['stop_line_positions']:
             tl = TrafficLight()
@@ -183,8 +183,7 @@ class TLDetector(object):
             state_pred = self.get_light_state(light) #Main way, uses classifier
             state_act = light.state 
             rospy.logwarn('Predicted vs actual state: %i | %i --> WP== %i',state_pred,state_act, light_wp)
-            state = state_act #TODO: REMOVE AFTER DEBUGGING NN CLASSIFIER
-            return light_wp, state
+            return light_wp, state_pred
         
         #Otherwise, trash and exit.    
         self.waypoints = None
