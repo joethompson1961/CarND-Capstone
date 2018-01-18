@@ -176,7 +176,7 @@ class Bridge(object):
         self.publishers['dbw_status'].publish(Bool(data))
 
     def publish_camera(self, data):
-	if((self.publish_counter % 10) == 0):
+	if((self.publish_counter % 5) == 0):
             imgString = data["image"]
             image = PIL_Image.open(BytesIO(base64.b64decode(imgString)))
             image_array = np.asarray(image)
