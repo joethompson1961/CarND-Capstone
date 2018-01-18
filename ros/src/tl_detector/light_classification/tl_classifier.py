@@ -1,9 +1,27 @@
 from styx_msgs.msg import TrafficLight
+import rospy
 import cv2
 import rospkg
 import numpy as np
 import tensorflow as tf
-from keras.models import load_model
+
+import keras
+from keras.preprocessing.image import ImageDataGenerator
+from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.optimizers import SGD
+from keras.optimizers import Adam
+from keras.optimizers import RMSprop
+from keras.models import load_model, Sequential
+from keras.preprocessing.image import load_img, img_to_array
+from keras.models import Model
+from keras.layers import Input, Activation, merge
+from keras.layers import Flatten, Dropout, Dense
+from keras.layers import Convolution2D, MaxPooling2D
+from keras.layers import AveragePooling2D
+from keras.optimizers import Adam
+import keras.backend as K
+K.set_image_dim_ordering('tf')
+
 
 IN_IMAGE_WIDTH  = 400
 IN_IMAGE_HEIGHT = 300
@@ -14,7 +32,8 @@ class TLClassifier(object):
         rospack = rospkg.RosPack()
         rospath = rospack.get_path('tl_detector')
         print("Current path: " +rospath)
-        self.model = load_model(rospath + '/prototype_traffic_light_classifier.h5')
+        self.model = load_model(rospath + '/250-resnet-18.h5')
+        print("Model successfully loaded!")
         self.model._make_predict_function()
         self.graph = tf.get_default_graph()
 
@@ -40,9 +59,8 @@ class TLClassifier(object):
             predictions = self.model.predict(img)
             predicted_cat = np.argmax(predictions,axis=1)
 
-            print('Predicted state: ', predicted_cat[0])
             light = predicted_cat[0]
-
+            rospy.logwarn("Predicted = %i ", light)
             if(light==0):
                 return TrafficLight.GREEN
             elif(light==1):

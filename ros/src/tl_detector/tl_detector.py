@@ -161,11 +161,13 @@ class TLDetector(object):
 
         """
         light = None
-#        rospy.logwarn('Traffic light processing beginning')
         
         #Exit early if no waypoints are set
         if (self.waypoints is None):
             rospy.logwarn("***EXITING TRAFFIC LIGHTS EARLY")
+            return -1, TrafficLight.UNKNOWN
+        if (len(self.stop_pts)==0):
+            rospy.logwarn("***STOP POINTS IS ZERO WHILE PROCESSING LIGHTS, EXIT EARLY***")
             return -1, TrafficLight.UNKNOWN
      
         if(self.pose):
@@ -180,7 +182,7 @@ class TLDetector(object):
         if light:
             state_pred = self.get_light_state(light) #Main way, uses classifier
             state_act = light.state 
-            rospy.logwarn('Predicted vs actual state: %i | %i > WP= %i',state_pred,state_act, light_wp)
+            rospy.logwarn('Predicted vs actual state: %i | %i --> WP== %i',state_pred,state_act, light_wp)
             state = state_act #TODO: REMOVE AFTER DEBUGGING NN CLASSIFIER
             return light_wp, state
         
