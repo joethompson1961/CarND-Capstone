@@ -11,7 +11,7 @@ import copy
 import math
 import scipy.interpolate as inter
 import numpy as np
-import pylab as plt
+#import pylab as plt
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -54,7 +54,7 @@ class WaypointUpdater(object):
         self.loop()
 
     def loop(self):
-        rate = rospy.Rate(50) # 50Hz
+        rate = rospy.Rate(5) # 5Hz
         prev_closest = -1
         stopping = 1
         cruising = 0
