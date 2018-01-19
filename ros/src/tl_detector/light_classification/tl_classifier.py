@@ -59,7 +59,7 @@ class TLClassifier(object):
             predicted_cat = np.argmax(predictions,axis=1)
 
             light = predicted_cat[0]
-            rospy.logwarn("Predicted = %i ", light)
+#            rospy.logwarn("Predicted = %i ", light)
             if(light==0):
                 return TrafficLight.GREEN
             elif(light==1):

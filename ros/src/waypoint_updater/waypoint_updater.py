@@ -42,6 +42,7 @@ class WaypointUpdater(object):
         rospy.Subscriber('/current_velocity', TwistStamped, self.current_velocity_cb)
         rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_enabled_cb)
 
+        self.speed_lmt = rospy.get_param('/waypoint_loader/velocity') * 1000 / 3600. # m/s 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
         self.all_waypoints = None
         self.pose = None
@@ -50,7 +51,6 @@ class WaypointUpdater(object):
         self.obstacle_wp = -1 
         self.current_velocity = 0.0
         self.dbw = False
-        self.speed_lmt = 0.0
         
         self.loop()
 
@@ -245,8 +245,6 @@ class WaypointUpdater(object):
     def waypoints_cb(self, msg):
         self.all_waypoints = msg.waypoints;
         self.num_waypoints = len(self.all_waypoints)
-        self.speed_lmt = self.get_waypoint_velocity(self.all_waypoints[0])
-        rospy.logwarn("speed_lmt: %f", self.speed_lmt)
 
     # Callback for /traffic_waypoint message (traffic lights)
     def traffic_cb(self, msg):

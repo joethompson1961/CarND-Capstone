@@ -182,7 +182,7 @@ class TLDetector(object):
         if light:
             state_pred = self.get_light_state(light) #Main way, uses classifier
             state_act = light.state 
-            rospy.logwarn('Predicted vs actual state: %i | %i --> WP== %i',state_pred,state_act, light_wp)
+#            rospy.logwarn('Predicted vs actual state: %i | %i --> WP== %i',state_pred,state_act, light_wp)
             return light_wp, state_pred
         
         #Otherwise, trash and exit.    
