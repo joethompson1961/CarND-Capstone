@@ -56,7 +56,7 @@ class WaypointLoader(object):
                 p.twist.twist.linear.x = float(self.velocity)
 
                 waypoints.append(p)
-#        return self.decelerate(waypoints)
+        return self.decelerate(waypoints)
         return waypoints
 
     def distance(self, p1, p2):

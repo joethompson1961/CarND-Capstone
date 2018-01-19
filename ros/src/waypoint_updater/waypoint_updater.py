@@ -49,8 +49,9 @@ class WaypointUpdater(object):
         self.redLight_wp = -1
         self.obstacle_wp = -1 
         self.current_velocity = 0.0
-        self.speed_lmt = 0.0
         self.dbw = False
+        self.speed_lmt = 0.0
+        
         self.loop()
 
     def loop(self):
@@ -227,7 +228,7 @@ class WaypointUpdater(object):
                 self.publish(waypoints)
 
                 #display the current closest waypoint           
-                rospy.logwarn('waypoint#:%i  target velocity:%f mps  velocity:%f  redLight:%i', closest, self.get_waypoint_velocity(waypoints[0]), self.current_velocity, self.redLight_wp)
+#                rospy.logwarn('waypoint#:%i  target velocity:%f mps  velocity:%f  redLight:%i', closest, self.get_waypoint_velocity(waypoints[0]), self.current_velocity, self.redLight_wp)
             
             rate.sleep()
 
@@ -239,7 +240,6 @@ class WaypointUpdater(object):
         self.final_waypoints_pub.publish(lane)
         
     def pose_cb(self, msg):
-#        rospy.logwarn("pose_cb")
         self.pose = msg.pose
 
     def waypoints_cb(self, msg):
@@ -247,8 +247,6 @@ class WaypointUpdater(object):
         self.num_waypoints = len(self.all_waypoints)
         self.speed_lmt = self.get_waypoint_velocity(self.all_waypoints[0])
         rospy.logwarn("speed_lmt: %f", self.speed_lmt)
-#        for i in range(0, self.num_waypoints-1):
-#            self.set_waypoint_velocity(self.all_waypoints, i, 0.0)
 
     # Callback for /traffic_waypoint message (traffic lights)
     def traffic_cb(self, msg):
@@ -282,6 +280,10 @@ class WaypointUpdater(object):
         dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)
         dist = dl(pose1.position, pose2.position)
         return dist
+
+    # convert kilometers per hour to meters per sec
+    def kmph2mps(self, velocity_kmph):
+        return (velocity_kmph * 1000.) / (60. * 60.)
 
 if __name__ == '__main__':
     try:
