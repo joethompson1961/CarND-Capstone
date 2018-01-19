@@ -123,9 +123,10 @@ class WaypointUpdater(object):
     			# if closest is behind current pose select next waypoint which is hopefully in front of car
                 if (angle_1 > 90) and (angle_1 < 270):
                     closest += direction   
-
+                # don't let closest go negative
+                closest = (closest + self.num_waypoints) % self.num_waypoints  
                 prev_closest = closest
-                
+
                 # If not in stopping mode then check if stop is needed                                
                 if (stopping == 0):
                     if (self.redLight_wp != -1) and (self.redLight_wp < (closest + 150)):
