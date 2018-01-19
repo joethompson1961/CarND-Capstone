@@ -32,7 +32,7 @@ class TLClassifier(object):
         rospack = rospkg.RosPack()
         rospath = rospack.get_path('tl_detector')
         print("Current path: " +rospath)
-        self.model = load_model(rospath + '/250-resnet-18.h5')
+        self.model = load_model(rospath + '/newdata-resnet-18.h5')
         print("Model successfully loaded!")
         self.model._make_predict_function()
         self.graph = tf.get_default_graph()
