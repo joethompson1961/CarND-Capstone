@@ -66,23 +66,28 @@ class DBWNode(object):
         self.loop()
 
     def loop(self):
+        rospy.loginfo('velocity, tgt_velocity, throttle, brake, steering')
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
-            # Get predicted throttle, brake, and steering using `twist_controller`
-            # You should only publish the control commands if dbw is enabled
-            # throttle, brake, steering = self.controller.control(<proposed linear velocity>,
-            #                                                     <proposed angular velocity>,
-            #                                                     <current linear velocity>,
-            #                                                     <dbw status>,
-            #                                                     <any other argument you need>)
-            throttle, brake, steering = self.controller.control(self.linear_velocity,self.angular_velocity,self.current_velocity)
-
-#            rospy.logwarn('velocity: %f  target velocity: %f', self.current_velocity, self.linear_velocity)
-#            rospy.loginfo('target angular velocity: %f', self.angular_velocity)
-#            rospy.logwarn('throttle: %f  brake: %f  steering: %f', throttle, brake, steering)
-
             if self.dbw:
+                # Get predicted throttle, brake, and steering using `twist_controller`
+                # You should only publish the control commands if dbw is enabled
+                # throttle, brake, steering = self.controller.control(<proposed linear velocity>,
+                #                                                     <proposed angular velocity>,
+                #                                                     <current linear velocity>,
+                #                                                     <dbw status>,
+                #                                                     <any other argument you need>)
+                throttle, brake, steering = self.controller.control(self.linear_velocity,self.angular_velocity,self.current_velocity)
+
+#                rospy.logwarn('velocity: %f  target velocity: %f', self.current_velocity, self.linear_velocity)
+#                rospy.loginfo('target angular velocity: %f', self.angular_velocity)
+#                rospy.logwarn('throttle: %f  brake: %f  steering: %f', throttle, brake/-500, steering)
+                rospy.loginfo('%f, %f, %f, %f, %f', self.current_velocity, self.linear_velocity, throttle, brake/-500, steering)
+
                 self.publish(throttle, brake, steering)
+#             else:
+#                 rospy.logwarn('%f', self.current_velocity)
+
             rate.sleep()
     
     def current_velocity_cb(self, msg):

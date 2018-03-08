@@ -4,7 +4,7 @@ This is the project repo for the final project of the Udacity Self-Driving Car N
 
 * Brent Wylie - bwylieaudio@gmail.com
 * Ioseph Martinez - martinez.pelayo@gmail.com
-* Joseph Thompson - joethompson@austin.rr.com
+* Joseph Thompson - joethompson@nxp.com
 
 ### Native Installation
 

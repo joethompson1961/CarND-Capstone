@@ -16,6 +16,7 @@ class LowPassFilter(object):
         if self.ready:
             val = self.a * val + self.b * self.last_val
         else:
+            val = 0.0
             self.ready = True
 
         self.last_val = val

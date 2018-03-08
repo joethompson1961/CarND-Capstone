@@ -70,9 +70,10 @@ double PurePursuit::getCmdVelocity(int waypoint) const
 void PurePursuit::calcLookaheadDistance(int waypoint)
 {
   double current_velocity_mps = current_velocity_.twist.linear.x;
-  double maximum_lookahead_distance =  current_velocity_mps * 10;
-  double ld = current_velocity_mps * lookahead_distance_calc_ratio_;
+  double maximum_lookahead_distance =  current_velocity_mps * 10;    // max look ahead is proportional to velocity (10 seconds)
+  double ld = current_velocity_mps * lookahead_distance_calc_ratio_; // typ look ahead is 2 seconds at current velocity
 
+  // Constrain look ahead distance to stay withing min and max bounds
   lookahead_distance_ = ld < minimum_lookahead_distance_ ? minimum_lookahead_distance_
                       : ld > maximum_lookahead_distance ? maximum_lookahead_distance
                       : ld ;
@@ -271,6 +272,7 @@ geometry_msgs::Twist PurePursuit::calcTwist(double curvature, double cmd_velocit
   return twist;
 }
 
+// return waypoint that's sufficiently ahead of ego, but not to far ahead.
 void PurePursuit::getNextWaypoint()
 {
   int path_size = static_cast<int>(current_waypoints_.getSize());
@@ -315,6 +317,8 @@ geometry_msgs::TwistStamped PurePursuit::outputZero() const
   twist.header.stamp = ros::Time::now();
   return twist;
 }
+
+// Add timestamp and constrain twist output to not exceed max lateral acceleration.
 geometry_msgs::TwistStamped PurePursuit::outputTwist(geometry_msgs::Twist t) const
 {
   double g_lateral_accel_limit = 5.0;
@@ -362,9 +366,10 @@ geometry_msgs::TwistStamped PurePursuit::go()
 
   bool interpolate_flag = false;
 
-  calcLookaheadDistance(1);
-  // search next waypoint
-  getNextWaypoint();
+  // lookahead distance is based on velocity but is also constained to must meet min/max requirements.
+  calcLookaheadDistance(1); // RETURNS: lookahead_distance_
+  // get waypoint that is lookahead distance ahead.
+  getNextWaypoint();        // RETURNS: num_of_next_waypoint_
   if (num_of_next_waypoint_ == -1)
   {
     ROS_WARN("lost next waypoint");
