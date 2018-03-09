@@ -178,7 +178,7 @@ class WaypointUpdater(object):
                     distance_to_stopline = self.distance2(pose, self.all_waypoints[rwp].pose.pose)
                     
                     # how much distance is needed to stop gently:  d = v**2/2*a
-                    a = 1.0  # allows for a gentle deceleration of 1mpss
+                    a = 1.65  # allows for a gentle deceleration of 1mpss
                     required_stopping_distance = (wp_v*wp_v)/(2*a)
                     
                     #rospy.logwarn("waypoint#:%i  target velocity:%f mps  req'd dist:%f  dist:%f  redlight:%i", closest, wp_v, required_stopping_distance, distance_to_stopline, rwp)
@@ -187,10 +187,10 @@ class WaypointUpdater(object):
                     if (wp_v == self.speed_lmt):  # if acceleration phase is complete then switch to cruising mode
                         rospy.logwarn("cruising")
                         policy = policy_CRUISE
-#                         for i in range(0, LOOKAHEAD_WPS-1):
-#                             # Maintain speed in waypoints ahead
-#                             j = self.convert_to_global(i, closest)
-#                             self.set_waypoint_velocity(self.all_waypoints, j, self.speed_lmt)
+                        for i in range(0, LOOKAHEAD_WPS-1):
+                            # Maintain speed in waypoints ahead
+                            j = self.convert_to_global(i, closest)
+                            self.set_waypoint_velocity(self.all_waypoints, j, self.speed_lmt)
                 # If not in stopping mode then check if stop is needed                            
                 if (policy == policy_ACCEL) or (policy == policy_CRUISE):
                     if distance_to_stopline <= required_stopping_distance:

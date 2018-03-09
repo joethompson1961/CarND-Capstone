@@ -1,6 +1,7 @@
 from yaw_controller import YawController
 from pid import PID
-from lowpass import LowPassFilter
+from lowpass import LowPassFilter_naive
+from lowpass import LowPassFilter_smooth
 import rospy
 
 GAS_DENSITY = 2.858
@@ -25,22 +26,27 @@ class Controller(object):
         T_PID_I = 0.0075
         T_PID_D = 0.005
         T_TAU   = 1.0  # lower tau --> higher cutoff frequency (tau = 0 --> passthru filter, no cutoff)
-        self.throttlePID = PID(T_PID_P, T_PID_I, T_PID_D, -accel_limit, accel_limit)
-        self.throttleLPF = LowPassFilter(T_TAU, TIME_STEP)  # use low pass filter to smooth out high frequency actuator jitter
-
-        # steering LPF and PID config
-        # Using P proportional to speed limit helps stablize steering at lower speeds
-        # S_PID_P = 0.05      # 10kph
-        # S_PID_P = 1.125     # 40kph
-        S_PID_P = self.speed_lmt*0.03583333-0.308333
-        S_PID_I = 0.00001
-        S_PID_D = 0.625
-        S_TAU   = 2.0  # lower --> higher LPF cutoff frequency (tau = 0 --> passthru filter, no cutoff)
-        self.steeringPID = PID(S_PID_P, S_PID_I, S_PID_D, -max_steer_angle, max_steer_angle)
-        self.steeringLPF = LowPassFilter(S_TAU, TIME_STEP)  # use low pass filter to smooth out high frequency actuator jitter
+        self.throttlePID = PID(T_PID_P, T_PID_I, T_PID_D, decel_limit, accel_limit)
+        self.throttleLPF = LowPassFilter_naive(T_TAU, TIME_STEP)  # use low pass filter to smooth out high frequency actuator jitter
 
         rospy.loginfo('P I D TAU TIME_STEP')
         rospy.loginfo('%f, %f, %f, %f, %f', T_PID_P, T_PID_I, T_PID_D, T_TAU, TIME_STEP)
+
+        # Configure steering LPF and PID config
+        # Using P proportional to speed limit helps stablize steering at lower speeds
+        # S_PID_P = 0.05      # 10kph
+        # S_PID_D = 1.0       # 10 kph
+        # S_TAU   = 2.0       # 10kph   lower --> higher LPF cutoff frequency (tau = 0 --> passthru filter, no cutoff)
+        #
+        # S_PID_P = 1.21      # 40kph
+        # S_PID_D = 0.85      # 40 kph
+        # S_TAU   = 5.0       # 40kph   
+        S_PID_P = self.speed_lmt*0.03833 - 0.335  # convert kph to kP
+        S_PID_I = 0.0001
+        S_PID_D = self.speed_lmt*-0.005 + 1.05       # convert kph to kD
+        S_TAU = self.speed_lmt*-0.1 + 6.0
+        self.steeringPID = PID(S_PID_P, S_PID_I, S_PID_D, -max_steer_angle, max_steer_angle)
+        self.steeringLPF = LowPassFilter_naive(S_TAU, TIME_STEP)  # use low pass filter to smooth out high frequency actuator jitter
         
     # Return throttle, brake, steer
     def control(self, linear_velocity, angular_velocity, current_velocity):
@@ -52,7 +58,8 @@ class Controller(object):
         brake = 0.0
         if throttle <= 0.0:
             # Negative throttle equals coasting/braking. Braking needs to be converted to N*m.
-            # Convert throttle to brake pressure (Nm). Decel_limit is specified in G's, i.e. 9.8 m/s/s.
+            # Convert throttle to brake pressure (Nm)
+            # Decel_limit is specified in G's, i.e. a multiple of 9.8 m/s/s.
             brake = throttle * 2.45 * self.decel_limit * self.vehicle_mass * self.wheel_radius
             throttle = 0.0;
      
